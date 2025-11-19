@@ -154,24 +154,18 @@ export default function TicketDetailPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (!editingCommentId || !editingContent.text.trim()) return;
+    if (!editingCommentId || !editingContent.text.trim() || !ticketId) return;
 
     try {
       setUpdatingComment(true);
-      await ticketsApi.updateComment(editingCommentId, {
+      const updatedComment = await ticketsApi.updateComment(editingCommentId, {
         content: editingContent
       });
 
-      // Update the comment in local state
-      setComments(comments.map(comment => 
+      // Update the comment in local state with the response from server
+      setComments(comments.map((comment: Comment) => 
         comment.id === editingCommentId 
-          ? { 
-              ...comment, 
-              content: editingContent, 
-              updatedAt: new Date().toISOString(),
-              edited: true,
-              edit_count: (comment.edit_count || 0) + 1
-            }
+          ? updatedComment
           : comment
       ));
 
@@ -440,7 +434,7 @@ export default function TicketDetailPage() {
                         <p className="text-sm">Be the first to add a comment!</p>
                       </div>
                     ) : (
-                      comments.map((comment) => {
+                      comments.map((comment: Comment) => {
                         const isEditing = editingCommentId === comment.id;
                         const canEdit = user && canEditComment(comment.createdAt, user.id, comment.user.id);
                         const timeRemaining = getEditTimeRemaining(comment.createdAt);
@@ -541,12 +535,38 @@ export default function TicketDetailPage() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                <RichTextEditor
-                                  content={convertLegacyContent(comment.content)}
-                                  editable={false}
-                                  className="border-none bg-transparent"
-                                />
+                              <div>
+                                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                  <RichTextEditor
+                                    content={convertLegacyContent(comment.content)}
+                                    editable={false}
+                                    className="border-none bg-transparent"
+                                  />
+                                </div>
+                                
+                                {/* ENHANCEMENT L1 COMMENT EDITING - Edit history display */}
+                                {comment.edit_history && comment.edit_history.length > 0 && (
+                                  <details className="mt-2">
+                                    <summary className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+                                      View edit history ({comment.edit_history.length} edit{comment.edit_history.length !== 1 ? 's' : ''})
+                                    </summary>
+                                    <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-300 dark:border-gray-600">
+                                      {comment.edit_history.map((edit, index) => (
+                                        <div key={index} className="text-xs">
+                                          <div className="text-gray-500 dark:text-gray-400 mb-1">
+                                            Edited {formatFullDateTime(edit.edited_at)}
+                                          </div>
+                                          {edit.previous_content && (
+                                            <div className="bg-gray-100 dark:bg-gray-800 rounded p-2 text-gray-600 dark:text-gray-400">
+                                              <div className="font-medium mb-1">Previous version:</div>
+                                              <div className="text-xs">{edit.previous_content.text}</div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+                                )}
                               </div>
                             )}
                           </div>
@@ -679,7 +699,7 @@ export default function TicketDetailPage() {
                       </label>
                       <Textarea
                         value={closingComment}
-                        onChange={(e) => setClosingComment(e.target.value)}
+                        onChange={(e) => setClosingComment((e.target as HTMLTextAreaElement).value)}
                         placeholder="Describe how the issue was resolved..."
                         rows={3}
                         className="w-full mb-3"
