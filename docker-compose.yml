@@ -27,7 +27,7 @@ services:
       - "8000:8000"
     environment:
       - MONGODB_URI=mongodb://root:example@mongo:27017/rev-ticketing-system?authSource=admin
-      - GOOGLE_API_KEY=
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     depends_on:
       mongo:
         condition: service_healthy
