@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Button, Breadcrumb, BreadcrumbItem } from 'flowbite-react';
+import { Button, Breadcrumb, BreadcrumbItem, Badge } from 'flowbite-react';
 import Link from 'next/link';
-import { ArrowLeft, Calendar, BookOpen, Tag } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Tag, Edit } from 'lucide-react';
 import { MainLayout, ProtectedRoute } from '../../../src/app/shared/components';
 import { LoadingSpinner } from '../../../src/app/shared/components';
 import { articlesApi } from '../../../src/lib/api';
@@ -15,12 +15,13 @@ import type { Article } from '../../../src/app/shared/types';
 export default function ArticleDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { } = useAuth();
+  const { user } = useAuth();
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const articleId = params.id as string;
+  const isAgent = user?.role === 'agent';
 
   useEffect(() => {
     const fetchArticle = async () => {
@@ -44,6 +45,10 @@ export default function ArticleDetailPage() {
 
   const handleBack = () => {
     router.back();
+  };
+
+  const handleEdit = () => {
+    router.push(`/knowledge-base/${articleId}/edit`);
   };
 
   if (loading) {
@@ -98,10 +103,30 @@ export default function ArticleDetailPage() {
           <div className="max-w-4xl mx-auto">
             {/* Article Header */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 mb-6">
+              {/* Edit Button (Agent Only) */}
+              {isAgent && (
+                <div className="flex justify-end mb-4">
+                  <Button
+                    onClick={handleEdit}
+                    className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Article
+                  </Button>
+                </div>
+              )}
+              
               <div className="text-center mb-8">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4 leading-tight">
-                  {article.title}
-                </h1>
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <h1 className="text-4xl font-bold text-gray-900 dark:text-white leading-tight">
+                    {article.title}
+                  </h1>
+                  {article.updatedAt !== article.createdAt && (
+                    <Badge color="warning" size="sm" className="mt-2">
+                      Edited
+                    </Badge>
+                  )}
+                </div>
                 
                 {/* Article Meta */}
                 <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600 dark:text-gray-400">
@@ -118,7 +143,9 @@ export default function ArticleDetailPage() {
                   {article.updatedAt !== article.createdAt && (
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4" />
-                      <span>Updated {formatFullDateTime(article.updatedAt)}</span>
+                      <span className="text-orange-600 dark:text-orange-400 font-medium">
+                        Last edited {formatFullDateTime(article.updatedAt)}
+                      </span>
                     </div>
                   )}
                 </div>
