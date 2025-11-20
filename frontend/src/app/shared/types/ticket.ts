@@ -76,6 +76,16 @@ export interface Comment {
   content: RichTextContent;
   createdAt: string;
   updatedAt: string;
+  // ENHANCEMENT L1 COMMENT EDITING - Add edit tracking fields
+  edited?: boolean;
+  edit_count?: number;
+  edit_history?: CommentEditHistory[];
+}
+
+// ENHANCEMENT L1 COMMENT EDITING - Edit history tracking
+export interface CommentEditHistory {
+  edited_at: string;
+  previous_content?: RichTextContent;
 }
 
 export interface CreateComment {

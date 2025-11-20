@@ -50,6 +50,9 @@ export const API_ENDPOINTS = {
   // Comments
   COMMENTS: {
     BY_ID: (id: string) => `/comments/${id}`,
+    // ENHANCEMENT L1 COMMENT EDITING - Edit endpoint
+    EDIT: (id: string) => `/comments/${id}`,
+    CAN_EDIT: (id: string) => `/comments/${id}/can-edit`,
   },
   
   // Articles (Knowledge Base)
