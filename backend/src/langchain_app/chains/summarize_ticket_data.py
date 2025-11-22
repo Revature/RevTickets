@@ -39,11 +39,20 @@ async def summarize_ticket_data(ticket_data: dict) -> str:
 
         # Add 20-second timeout for API call - fallback to text summary if timeout
         try:
-            response = await asyncio.wait_for(
-                llm.ainvoke(messages),
-                timeout=20.0
-            )
-            return response.content.strip()
+            # Create a task that can be cancelled
+            task = asyncio.create_task(llm.ainvoke(messages))
+            try:
+                response = await asyncio.wait_for(task, timeout=20.0)
+                return response.content.strip()
+            except asyncio.TimeoutError:
+                # Cancel the task if it's still running
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                raise  # Re-raise to handle in outer except block
         except asyncio.TimeoutError:
             print("AI summarization timed out after 20 seconds - using fallback summary")
             # Fallback to simple text-based summary when API times out

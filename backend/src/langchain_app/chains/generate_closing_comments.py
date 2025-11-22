@@ -38,11 +38,20 @@ async def generate_closing_comments(ticket_data: dict) -> str:
         chain = llm | parser
         # Add 20-second timeout for API call - fallback if timeout
         try:
-            response = await asyncio.wait_for(
-                chain.ainvoke(messages),
-                timeout=20.0
-            )
-            return response
+            # Create a task that can be cancelled
+            task = asyncio.create_task(chain.ainvoke(messages))
+            try:
+                response = await asyncio.wait_for(task, timeout=20.0)
+                return response
+            except asyncio.TimeoutError:
+                # Cancel the task if it's still running
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                raise  # Re-raise to handle in outer except block
         except asyncio.TimeoutError:
             print("AI closing comments generation timed out after 20 seconds - using fallback")
             return {

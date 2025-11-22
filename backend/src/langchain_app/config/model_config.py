@@ -15,8 +15,8 @@ def get_llm() -> Optional[ChatGoogleGenerativeAI]:
                 model="gemini-2.0-flash",
                 temperature=0,
                 max_tokens=None,
-                timeout=None,
-                max_retries=2,
+                timeout=25.0,  # Set timeout to 25 seconds (5 second buffer for asyncio.wait_for 20s timeout)
+                max_retries=1,  # Reduce retries to ensure timeout works properly
             )
         except Exception as e:
             print(f"Warning: Failed to initialize LLM: {e}")
@@ -31,8 +31,8 @@ if settings.google_api_key:
             model="gemini-2.0-flash",
             temperature=0,
             max_tokens=None,
-            timeout=None,
-            max_retries=2,
+            timeout=25.0,  # Set timeout to 25 seconds (5 second buffer for asyncio.wait_for 20s timeout)
+            max_retries=1,  # Reduce retries to ensure timeout works properly
         )
     except Exception:
         # If initialization fails, it will be created lazily when needed
