@@ -112,6 +112,39 @@ class ArticleService:
             await article.delete()
 
     @staticmethod
+    async def search_articles(
+        query: str, 
+        category_id: str = None, 
+        subcategory_id: str = None
+    ) -> List[ArticleResponse]:
+        """
+        Search articles by title with optional category/subcategory filters
+        """
+        all_articles = await Article.find_all().to_list()
+        results = []
+        
+        query_lower = query.lower().strip()
+        
+        for article in all_articles:
+            # Check if title matches search query (case-insensitive)
+            if query_lower not in article.title.lower():
+                continue
+            
+            # Apply category filter if provided
+            if category_id:
+                if not (hasattr(article.category_id, 'id') and str(article.category_id.id) == category_id):
+                    continue
+            
+            # Apply subcategory filter if provided
+            if subcategory_id:
+                if not (hasattr(article.subcategory_id, 'id') and str(article.subcategory_id.id) == subcategory_id):
+                    continue
+            
+            results.append(article)
+        
+        return [await ArticleService._build_response(a) for a in results]
+
+    @staticmethod
     async def _build_response(article: Article) -> ArticleResponse:
         # Handle linked objects - they might be Link objects (need fetch) or actual objects (already fetched)
         if hasattr(article.category_id, 'fetch'):
@@ -181,48 +214,3 @@ class ArticleService:
             created_at=article.created_at,
             updated_at=article.updated_at,
         )
-
-    # ENHANCEMENT L1 KB TITLE SEARCH - Search articles by title and content
-    @staticmethod
-    async def search_articles(query: str, category_id: str = None, subcategory_id: str = None) -> List[ArticleResponse]:
-        """Search articles by title and content using MongoDB text search"""
-        import re
-        from beanie import PydanticObjectId
-        
-        # Build search filters
-        filters = {}
-        
-        # Add category filter if provided
-        if category_id:
-            try:
-                filters["category_id"] = PydanticObjectId(category_id)
-            except:
-                pass  # Invalid ID format, ignore filter
-                
-        # Add subcategory filter if provided  
-        if subcategory_id:
-            try:
-                filters["subcategory_id"] = PydanticObjectId(subcategory_id)
-            except:
-                pass  # Invalid ID format, ignore filter
-        
-        # Create regex pattern for case-insensitive search in title and content
-        search_pattern = re.compile(re.escape(query), re.IGNORECASE)
-        
-        # Search in title and content fields
-        search_filter = {
-            "$or": [
-                {"title": {"$regex": search_pattern}},
-                {"content.text": {"$regex": search_pattern}}
-            ]
-        }
-        
-        # Combine filters
-        if filters:
-            search_filter = {"$and": [search_filter, filters]}
-        
-        # Execute search
-        articles = await Article.find(search_filter).to_list()
-        
-        # Build responses
-        return [await ArticleService._build_response(article) for article in articles]

@@ -1,4 +1,4 @@
-from passlib.context import CryptContext
+import bcrypt
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
@@ -13,14 +13,21 @@ SECRET_KEY = "rev-ticketing-system-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash password with bcrypt, handling the 72 byte limitation"""
+    # Truncate password to 72 bytes to avoid bcrypt limitation
+    password_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify password against hash"""
+    password_bytes = plain.encode('utf-8')[:72]
+    hashed_bytes = hashed.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()

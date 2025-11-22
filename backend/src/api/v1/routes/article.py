@@ -32,9 +32,15 @@ async def delete_article(article_id: str):
 async def get_all_articles():
     return await ArticleService.get_all_articles()
 
-# ENHANCEMENT L1 KB TITLE SEARCH - Search endpoint (must come before parameterized routes)
 @router.get("/search", response_model=List[ArticleResponse], dependencies=[Depends(get_current_user)])
-async def search_articles(q: str, categoryId: str = None, subcategoryId: str = None):
+async def search_articles(
+    q: str,
+    categoryId: str = None,
+    subcategoryId: str = None
+):
+    """
+    Search articles by title with optional category/subcategory filters
+    """
     return await ArticleService.search_articles(q, categoryId, subcategoryId)
 
 @router.get("/category/{category_id}", response_model=List[ArticleResponse], dependencies=[Depends(get_current_user)])
