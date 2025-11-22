@@ -16,11 +16,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Make start script executable
-RUN chmod +x start.sh
+# Fix line endings and make start script executable
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
 # Expose the port FastAPI runs on
 EXPOSE 8000
 
 # Set the entrypoint
-CMD ["./start.sh"]
+CMD ["bash", "start.sh"]

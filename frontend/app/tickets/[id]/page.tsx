@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Breadcrumb, BreadcrumbItem, Button, Avatar, Textarea } from 'flowbite-react';
-import { MessageCircle, AlertCircle, Edit3, CheckCircle2, XCircle, Home, Brain, Sparkles } from 'lucide-react';
+import { Breadcrumb, BreadcrumbItem, Button, Avatar, Textarea, Alert } from 'flowbite-react';
+import { MessageCircle, AlertCircle, Edit3, CheckCircle2, XCircle, Home, Brain, Sparkles, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { MainLayout, ProtectedRoute } from '../../../src/app/shared/components';
 import { LoadingSpinner } from '../../../src/app/shared/components';
@@ -35,6 +35,8 @@ export default function TicketDetailPage() {
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
 
   const fetchTicketData = useCallback(async () => {
     if (!ticketId) return;
@@ -53,6 +55,12 @@ export default function TicketDetailPage() {
         setSummary(ticketData.aiSummary);
         setSummaryGeneratedAt(ticketData.summaryGeneratedAt || null);
         setShowSummary(true);
+        setSummaryError(null); // Clear any previous errors
+      } else {
+        // Reset summary state if ticket doesn't have one
+        setSummary(null);
+        setSummaryGeneratedAt(null);
+        setShowSummary(false);
       }
     } catch (error) {
       console.error('Failed to fetch ticket data:', error);
@@ -151,20 +159,65 @@ export default function TicketDetailPage() {
   const canModifyTicket = user?.role === 'agent' && ticket?.agentInfo?.id === user.id;
 
   // ENHANCEMENT L1 AI TICKET SUMMARY - Generate summary function
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = async (isRefresh = false) => {
     if (!ticketId) return;
 
     try {
-      setGeneratingSummary(true);
+      // Clear previous errors
+      setSummaryError(null);
+      
+      // Set appropriate loading state
+      if (isRefresh) {
+        setIsRefreshingSummary(true);
+      } else {
+        setGeneratingSummary(true);
+      }
+
       const response = await ticketsApi.generateSummary(ticketId);
+      
+      // Update summary data
       setSummary(response.summary);
       setSummaryGeneratedAt(new Date().toISOString());
       setShowSummary(true);
+      
+      // Update ticket data to reflect the new summary
+      const updatedTicket = await ticketsApi.getById(ticketId);
+      setTicket(updatedTicket);
     } catch (error) {
       console.error('Failed to generate summary:', error);
+      
+      // Extract error message
+      let errorMessage = 'Failed to generate summary. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message || errorMessage;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('401') || errorMessage.includes('403')) {
+        errorMessage = 'You do not have permission to generate summaries.';
+      } else if (errorMessage.includes('500') || errorMessage.includes('503')) {
+        errorMessage = 'AI service is temporarily unavailable. Please try again later.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      setSummaryError(errorMessage);
     } finally {
       setGeneratingSummary(false);
+      setIsRefreshingSummary(false);
     }
+  };
+
+  // Handle summary refresh
+  const handleRefreshSummary = async () => {
+    await handleGenerateSummary(true);
+  };
+
+  // Toggle summary visibility
+  const toggleSummaryVisibility = () => {
+    setShowSummary(!showSummary);
   };
   
 
@@ -391,60 +444,168 @@ export default function TicketDetailPage() {
                 {user?.role === 'agent' && ticket.status !== 'closed' && (
                   <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
-                        <Brain className="h-5 w-5 mr-2 text-purple-600" />
+                      <div className="flex items-center space-x-2">
+                        <Brain className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                         <h4 className="text-sm font-medium text-purple-900 dark:text-purple-200">
                           AI Ticket Summary
                         </h4>
+                        {summary && (
+                          <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded-full">
+                            Available
+                          </span>
+                        )}
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
-                        onClick={handleGenerateSummary}
-                        disabled={generatingSummary}
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {generatingSummary ? 'Generating...' : (summary ? 'Regenerate Summary' : 'Generate Summary')}
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        {summary && (
+                          <>
+                            <Button
+                              size="sm"
+                              color="gray"
+                              onClick={handleRefreshSummary}
+                              disabled={generatingSummary || isRefreshingSummary}
+                              title="Refresh summary"
+                            >
+                              <RefreshCw className={`h-4 w-4 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              color="gray"
+                              onClick={toggleSummaryVisibility}
+                              title={showSummary ? 'Hide summary' : 'Show summary'}
+                            >
+                              {showSummary ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          size="sm"
+                          className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
+                          onClick={() => handleGenerateSummary(false)}
+                          disabled={generatingSummary || isRefreshingSummary}
+                        >
+                          {generatingSummary || isRefreshingSummary ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="h-4 w-4 mr-2" />
+                              {summary ? 'Regenerate Summary' : 'Generate Summary'}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
 
-                    {/* Loading state */}
-                    {generatingSummary && (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                        <span className="ml-3 text-sm text-purple-700 dark:text-purple-300">
+                    {/* Error state */}
+                    {summaryError && (
+                      <Alert color="failure" className="mb-4" onDismiss={() => setSummaryError(null)}>
+                        <div className="flex items-center">
+                          <AlertCircle className="h-5 w-5 mr-2" />
+                          <div>
+                            <div className="font-medium">Summary Generation Failed</div>
+                            <div className="text-sm mt-1">{summaryError}</div>
+                          </div>
+                        </div>
+                      </Alert>
+                    )}
+
+                    {/* Loading state - Initial generation */}
+                    {generatingSummary && !summary && (
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600 mb-4"></div>
+                        <span className="text-sm text-purple-700 dark:text-purple-300 font-medium">
                           AI is analyzing the ticket conversation...
+                        </span>
+                        <span className="text-xs text-purple-600 dark:text-purple-400 mt-2">
+                          This may take a few moments
                         </span>
                       </div>
                     )}
 
+                    {/* Loading state - Refreshing existing summary */}
+                    {isRefreshingSummary && summary && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 p-4 opacity-75">
+                        <div className="flex items-center justify-center py-4">
+                          <RefreshCw className="h-5 w-5 animate-spin text-purple-600 mr-2" />
+                          <span className="text-sm text-purple-700 dark:text-purple-300">
+                            Refreshing summary...
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Summary display */}
-                    {showSummary && summary && !generatingSummary && (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h5 className="text-sm font-medium text-gray-900 dark:text-white">
-                            Summary Generated
-                          </h5>
+                    {showSummary && summary && !generatingSummary && !isRefreshingSummary && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 p-4 transition-opacity duration-300">
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                          <div className="flex items-center space-x-2">
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            <h5 className="text-sm font-semibold text-gray-900 dark:text-white">
+                              Summary Generated
+                            </h5>
+                          </div>
                           {summaryGeneratedAt && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatFullDateTime(summaryGeneratedAt)}
-                            </span>
+                            <div className="flex flex-col items-end">
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                Generated
+                              </span>
+                              <span className="text-xs text-gray-600 dark:text-gray-300">
+                                {formatFullDateTime(summaryGeneratedAt)}
+                              </span>
+                            </div>
                           )}
                         </div>
                         <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                          <div className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
                             {summary}
-                          </p>
+                          </div>
                         </div>
-                        <div className="flex justify-end mt-3">
-                          <Button
-                            size="xs"
-                            color="gray"
-                            onClick={() => setShowSummary(false)}
-                          >
-                            Hide Summary
-                          </Button>
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {summary.split(' ').length} words • {summary.length} characters
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="xs"
+                              color="gray"
+                              onClick={handleRefreshSummary}
+                              disabled={isRefreshingSummary}
+                            >
+                              <RefreshCw className={`h-3 w-3 mr-1 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
+                              Refresh
+                            </Button>
+                            <Button
+                              size="xs"
+                              color="gray"
+                              onClick={toggleSummaryVisibility}
+                            >
+                              <EyeOff className="h-3 w-3 mr-1" />
+                              Hide
+                            </Button>
+                          </div>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Hidden summary indicator */}
+                    {summary && !showSummary && !generatingSummary && !isRefreshingSummary && (
+                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 p-3 flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Brain className="h-4 w-4 text-purple-600" />
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Summary is available but hidden
+                          </span>
+                        </div>
+                        <Button
+                          size="xs"
+                          color="gray"
+                          onClick={toggleSummaryVisibility}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          Show Summary
+                        </Button>
                       </div>
                     )}
                   </div>

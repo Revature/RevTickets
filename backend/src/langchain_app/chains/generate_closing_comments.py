@@ -1,12 +1,21 @@
-from src.langchain_app.config.model_config import llm
+from src.langchain_app.config.model_config import get_llm
 from langchain_core.output_parsers import JsonOutputParser
 from src.schemas.closing_comments import ClosingComments
 
 import json
+import asyncio
 
 parser = JsonOutputParser(pydantic_object=ClosingComments)
 
 async def generate_closing_comments(ticket_data: dict) -> str:
+    llm = get_llm()
+    if llm is None:
+        # Return default closing comments when LLM is not available
+        return {
+            "reason": "AI service unavailable",
+            "comment": "Ticket closed. AI-generated closing comments require a valid Google API key."
+        }
+    
     content = (
         f"Ticket Title: {ticket_data['title']}\n"
         f"Description: {ticket_data['description']}\n"
@@ -25,8 +34,24 @@ async def generate_closing_comments(ticket_data: dict) -> str:
         {"role": "user", "content": f"Please summarize the following ticket:\n{content}"}
     ]
 
-    chain = llm | parser
-
-    response = await chain.ainvoke(messages)
-
-    return response
+    try:
+        chain = llm | parser
+        # Add 20-second timeout for API call - fallback if timeout
+        try:
+            response = await asyncio.wait_for(
+                chain.ainvoke(messages),
+                timeout=20.0
+            )
+            return response
+        except asyncio.TimeoutError:
+            print("AI closing comments generation timed out after 20 seconds - using fallback")
+            return {
+                "reason": "AI service timeout",
+                "comment": "Ticket closed. AI service did not respond within 20 seconds."
+            }
+    except Exception as e:
+        print(f"AI closing comments generation failed: {e}")
+        return {
+            "reason": "AI service error",
+            "comment": f"Ticket closed. Error generating AI comments: {str(e)}"
+        }
