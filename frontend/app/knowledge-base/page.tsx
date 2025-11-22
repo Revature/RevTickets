@@ -1,29 +1,49 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Table, TableHead, TableHeadCell, TableRow, TableCell, TableBody, TextInput } from 'flowbite-react';
-import { Plus, BookOpen, Calendar, Search, X } from 'lucide-react';
+import { Button, Card, Table, TableHead, TableHeadCell, TableRow, TableCell, TableBody, Pagination, Badge, Alert } from 'flowbite-react';
+import { Plus, BookOpen, Calendar, Filter, X } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MainLayout, ProtectedRoute } from '../../src/app/shared/components';
+import { MainLayout, ProtectedRoute, SearchBar } from '../../src/app/shared/components';
 import { LoadingSpinner } from '../../src/app/shared/components';
 import { articlesApi } from '../../src/lib/api';
-import { formatFullDateTime } from '../../src/lib/utils';
+import { formatFullDateTime, highlightSearchTerm, truncateAroundSearchTerm, getRichTextDisplay } from '../../src/lib/utils';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useDebounceSearch } from '../../src/app/shared/hooks/useDebounceSearch';
+import { useSearchHistory } from '../../src/app/shared/hooks/useSearchHistory';
 import type { Article } from '../../src/app/shared/types';
-import { getRichTextDisplay } from '../../src/lib/utils';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function KnowledgeBasePage() {
   const router = useRouter();
   const { user } = useAuth();
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
-  // ENHANCEMENT L1 KB TITLE SEARCH - Search functionality state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Article[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchError, setSearchError] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  
+  // Search functionality
+  const searchFn = useCallback(async (query: string) => {
+    const params: { q: string; categoryId?: string } = { q: query };
+    if (categoryFilter) {
+      params.categoryId = categoryFilter;
+    }
+    return await articlesApi.search(params);
+  }, [categoryFilter]);
+
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    results: searchResults,
+    loading: searchLoading,
+    error: searchError,
+    clearSearch,
+    isSearching,
+  } = useDebounceSearch<Article>(searchFn);
+
+  const { history: searchHistory, addToHistory } = useSearchHistory('kb-search-history');
 
   const fetchArticles = useCallback(async () => {
     try {
@@ -41,58 +61,40 @@ export default function KnowledgeBasePage() {
     fetchArticles();
   }, [fetchArticles]);
 
+  // Save successful searches to history
+  useEffect(() => {
+    if (searchQuery && searchResults.length > 0) {
+      addToHistory(searchQuery);
+    }
+  }, [searchQuery, searchResults.length, addToHistory]);
+
   const handleArticleClick = (articleId: string) => {
     router.push(`/knowledge-base/${articleId}`);
   };
 
-  // ENHANCEMENT L1 KB TITLE SEARCH - Search function
-  const handleSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setShowSearchResults(false);
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      setIsSearching(true);
-      setSearchError('');
-      const results = await articlesApi.search({ q: query });
-      setSearchResults(results);
-      setShowSearchResults(true);
-    } catch (error) {
-      console.error('Failed to search articles:', error);
-      setSearchResults([]);
-      setSearchError('Search failed. Please try again.');
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
-
-  // ENHANCEMENT L1 KB TITLE SEARCH - Debounced search effect
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      if (searchQuery.trim()) {
-        handleSearch(searchQuery);
-      } else {
-        // Clear search results when query is empty
-        setShowSearchResults(false);
-        setSearchResults([]);
-        setSearchError('');
-      }
-    }, 300);
-
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, handleSearch]);
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-    setSearchError('');
+  const handleRecentSearchClick = (search: string) => {
+    setSearchQuery(search);
   };
 
-  // ENHANCEMENT L1 KB TITLE SEARCH - Show search results when searching, all articles otherwise
-  const displayArticles = showSearchResults ? searchResults : articles;
+  const handleClearFilters = () => {
+    setCategoryFilter(null);
+    clearSearch();
+    setCurrentPage(1);
+  };
+
+  // Determine which articles to display
+  const displayArticles = isSearching ? searchResults : articles;
+
+  // Apply pagination
+  const totalPages = Math.ceil(displayArticles.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedArticles = displayArticles.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, categoryFilter]);
 
   if (loading) {
     return (
@@ -127,66 +129,90 @@ export default function KnowledgeBasePage() {
             </div>
           </div>
 
-          {/* ENHANCEMENT L1 KB TITLE SEARCH - Search interface */}
+          {/* Search Bar */}
           <Card>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <TextInput
-                type="text"
-                placeholder="Search knowledge base articles..."
+            <div className="space-y-4">
+              <SearchBar
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10"
+                onChange={setSearchQuery}
+                onClear={clearSearch}
+                placeholder="Search articles by title..."
+                loading={searchLoading}
+                autoFocus={false}
+                showClearButton={true}
+                recentSearches={searchHistory}
+                onRecentSearchClick={handleRecentSearchClick}
               />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+
+              {/* Active Filters */}
+              {(isSearching || categoryFilter) && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active filters:</span>
+                  </div>
+                  
+                  {isSearching && (
+                    <Badge color="info" className="flex items-center gap-1">
+                      Search: &ldquo;{searchQuery}&rdquo;
+                    </Badge>
+                  )}
+                  
+                  {categoryFilter && (
+                    <Badge color="info" className="flex items-center gap-1">
+                      Category filter
+                      <button
+                        onClick={() => setCategoryFilter(null)}
+                        className="ml-1 hover:text-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
+                  
+                  <Button
+                    size="xs"
+                    color="gray"
+                    onClick={handleClearFilters}
+                  >
+                    Clear all
+                  </Button>
+                </div>
+              )}
+
+              {/* Search Results Summary */}
+              {isSearching && (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {searchLoading ? (
+                    <span>Searching...</span>
+                  ) : (
+                    <span>
+                      Found <strong>{searchResults.length}</strong> {searchResults.length === 1 ? 'article' : 'articles'}
+                      {searchQuery && ` matching "${searchQuery}"`}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Search Error */}
+              {searchError && (
+                <Alert color="failure">
+                  <span className="font-medium">Search error:</span> {searchError}
+                </Alert>
               )}
             </div>
-            {isSearching && (
-              <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Searching...
-              </div>
-            )}
-            {searchError && (
-              <div className="mt-2 text-sm text-red-600 dark:text-red-400">
-                {searchError}
-              </div>
-            )}
-            {showSearchResults && !searchError && (
-              <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Found {searchResults.length} article{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
-                <button
-                  onClick={clearSearch}
-                  className="ml-2 text-orange-600 hover:text-orange-700 underline"
-                >
-                  Clear search
-                </button>
-              </div>
-            )}
           </Card>
-
 
           {/* Articles Table */}
           <Card>
-            {displayArticles.length === 0 ? (
+            {paginatedArticles.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-500 dark:text-gray-400">
                   <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  {showSearchResults ? (
+                  {isSearching ? (
                     <>
                       <h3 className="text-lg font-medium mb-2">No articles found</h3>
-                      <p className="text-sm">No articles match your search for &ldquo;{searchQuery}&rdquo;</p>
-                      <button
-                        onClick={clearSearch}
-                        className="mt-4 text-orange-600 hover:text-orange-700 underline"
-                      >
-                        Clear search to see all articles
-                      </button>
+                      <p className="text-sm">Try adjusting your search terms or filters</p>
                     </>
                   ) : (
                     <>
@@ -205,78 +231,111 @@ export default function KnowledgeBasePage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableHeadCell>Article</TableHeadCell>
-                      <TableHeadCell>Category</TableHeadCell>
-                      <TableHeadCell>Created</TableHeadCell>
-                      <TableHeadCell>Updated</TableHeadCell>
-                      <TableHeadCell>
-                        <span className="sr-only">Actions</span>
-                      </TableHeadCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody className="divide-y">
-                    {displayArticles.map((article) => (
-                      <TableRow
-                        key={article.id}
-                        className="bg-white dark:border-gray-700 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
-                          <div>
-                            <button
-                              onClick={() => handleArticleClick(article.id)}
-                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left"
-                            >
-                              <div className="font-medium">{article.title}</div>
-                            </button>
-                            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-md truncate">
-                              {getRichTextDisplay(article.content).substring(0, 100)}...
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {article.category?.name}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {article.subCategory?.name}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
-                            <span className="whitespace-nowrap">
-                              {formatFullDateTime(article.createdAt)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
-                            <span className="whitespace-nowrap">
-                              {formatFullDateTime(article.updatedAt)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="xs"
-                            className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 text-white"
-                            onClick={() => handleArticleClick(article.id)}
-                          >
-                            View
-                          </Button>
-                        </TableCell>
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableHeadCell>Article</TableHeadCell>
+                        <TableHeadCell>Category</TableHeadCell>
+                        <TableHeadCell>Created</TableHeadCell>
+                        <TableHeadCell>Updated</TableHeadCell>
+                        <TableHeadCell>
+                          <span className="sr-only">Actions</span>
+                        </TableHeadCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHead>
+                    <TableBody className="divide-y">
+                      {paginatedArticles.map((article) => {
+                        const contentPreview = getRichTextDisplay(article.content);
+                        const truncatedContent = isSearching
+                          ? truncateAroundSearchTerm(contentPreview, searchQuery, 150)
+                          : contentPreview.substring(0, 150);
+
+                        return (
+                          <TableRow
+                            key={article.id}
+                            className="bg-white dark:border-gray-700 dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                          >
+                            <TableCell className="whitespace-nowrap font-medium text-gray-900 dark:text-white">
+                              <div>
+                                <button
+                                  onClick={() => handleArticleClick(article.id)}
+                                  className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-left"
+                                >
+                                  <div className="font-medium">
+                                    {isSearching
+                                      ? highlightSearchTerm(article.title, searchQuery)
+                                      : article.title}
+                                  </div>
+                                </button>
+                                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-md">
+                                  {isSearching
+                                    ? highlightSearchTerm(truncatedContent, searchQuery)
+                                    : truncatedContent}
+                                  {contentPreview.length > 150 && '...'}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {article.category?.name}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {article.subCategory?.name}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-500 dark:text-gray-400">
+                              <div className="flex items-center space-x-1">
+                                <Calendar className="h-3 w-3" />
+                                <span className="whitespace-nowrap">
+                                  {formatFullDateTime(article.createdAt)}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-500 dark:text-gray-400">
+                              <div className="flex items-center space-x-1">
+                                <Calendar className="h-3 w-3" />
+                                <span className="whitespace-nowrap">
+                                  {formatFullDateTime(article.updatedAt)}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="xs"
+                                className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 text-white"
+                                onClick={() => handleArticleClick(article.id)}
+                              >
+                                View
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center mt-4">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPageChange={setCurrentPage}
+                      showIcons
+                    />
+                  </div>
+                )}
+
+                {/* Results Summary */}
+                <div className="mt-4 text-sm text-gray-600 dark:text-gray-400 text-center">
+                  Showing {startIndex + 1}-{Math.min(endIndex, displayArticles.length)} of {displayArticles.length} articles
+                </div>
+              </>
             )}
           </Card>
 
