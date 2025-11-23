@@ -64,8 +64,8 @@ class KBChatService:
             chain = KBChatChain()
             ai_response, sources = await chain.generate_response(user_message, chat_history)
 
-            # Save AI response
-            await session.add_message(message=ai_response, message_type="assistant")
+            # Save AI response with sources
+            await session.add_message(message=ai_response, message_type="assistant", sources=sources)
 
             return {
                 "response": ai_response,
@@ -92,19 +92,85 @@ class KBChatService:
         session = await KBChatService.get_session(session_id)
         if not session:
             return False
-        session.rating = rating  # optional field you may need to add in KBChatSession
+        session.satisfaction_rating = rating  # Store in satisfaction_rating field
+        session.rating = rating  # Also update rating for backward compatibility
         await session.save()
         return True
 
     @staticmethod
-    async def convert_to_ticket(session_id: str, ticket: TicketCreate) -> str:
+    async def convert_to_ticket(session_id: str, ticket_data: Dict[str, Any], current_user) -> str:
+        """Convert a chat session to a support ticket, including chat history in description"""
+        from src.models.rich_text import create_rich_text_from_text
+        
         session = await KBChatService.get_session(session_id)
         if not session:
-            return ""
+            raise ValueError("Chat session not found")
         
-        ticket = await TicketService.create_ticket(ticket)
-        session.ticket_id = str(ticket.id)
-        return ticket_id
+        # Get chat history to include in ticket description
+        chat_messages = await session.get_messages(limit=100)
+        
+        # Build chat history summary for ticket description
+        chat_history_text = "\n\n--- Chat History ---\n"
+        for msg in reversed(chat_messages):  # Reverse to show chronological order
+            role = "User" if msg.message_type == "user" else "Assistant"
+            timestamp = msg.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            chat_history_text += f"\n[{timestamp}] {role}: {msg.message}\n"
+        
+        # Append chat history to ticket description
+        enhanced_description = ticket_data.get("description", "")
+        if chat_history_text.strip():
+            enhanced_description = f"{enhanced_description}\n{chat_history_text}" if enhanced_description else chat_history_text.strip()
+        
+        # Create RichTextContent from description
+        rich_text_content = create_rich_text_from_text(enhanced_description)
+        
+        # Get default category/subcategory if not provided
+        category_id = ticket_data.get("category_id")
+        subcategory_id = ticket_data.get("subcategory_id")
+        
+        if not category_id or not subcategory_id:
+            # Get first available category and subcategory as defaults
+            from src.models.category import Category
+            from src.models.subcategory import SubCategory
+            
+            if not category_id:
+                first_category = await Category.find().limit(1).to_list()
+                if first_category:
+                    category_id = str(first_category[0].id)
+            
+            if not subcategory_id and category_id:
+                first_subcategory = await SubCategory.find(
+                    SubCategory.category == category_id
+                ).limit(1).to_list()
+                if first_subcategory:
+                    subcategory_id = str(first_subcategory[0].id)
+                else:
+                    # Fallback: get any subcategory
+                    any_subcategory = await SubCategory.find().limit(1).to_list()
+                    if any_subcategory:
+                        subcategory_id = str(any_subcategory[0].id)
+        
+        if not category_id or not subcategory_id:
+            raise ValueError("Category and subcategory are required. Please ensure categories exist in the system.")
+        
+        # Create ticket with enhanced description
+        ticket_create = TicketCreate(
+            category_id=category_id,
+            sub_category_id=subcategory_id,
+            title=ticket_data.get("title", "Support Request from Chat"),
+            description=enhanced_description,
+            content=rich_text_content,
+            priority=ticket_data.get("priority", "medium"),
+            tag_ids=ticket_data.get("tag_ids", [])
+        )
+        
+        # Create ticket using TicketService
+        created_ticket = await TicketService.create_ticket(ticket_create, current_user)
+        
+        # Mark session as converted and link to ticket
+        await session.mark_converted_to_ticket(str(created_ticket.id))
+        
+        return str(created_ticket.id)
 
     @staticmethod
     async def delete_session(session_id: str) -> bool:

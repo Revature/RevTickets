@@ -8,3 +8,5 @@ export * from './ProtectedRoute';
 export * from './FileUpload';
 // ENHANCEMENT L2 SLA AUTOMATION - Export SLA indicator component
 export * from './SLAIndicator';
+// ENHANCEMENT L3 KB CHAT - Export chat interface component
+export * from './ChatInterface';

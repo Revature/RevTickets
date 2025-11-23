@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button, Card, Table, TableHead, TableHeadCell, TableRow, TableCell, TableBody, TextInput, Badge, Tooltip } from 'flowbite-react';
-import { Plus, BookOpen, Calendar, Search, X, Sparkles } from 'lucide-react';
+import { Plus, BookOpen, Calendar, Search, X, Sparkles, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MainLayout, ProtectedRoute } from '../../src/app/shared/components';
@@ -131,6 +131,15 @@ export default function KnowledgeBasePage() {
               <p className="text-gray-600 dark:text-gray-400">Browse helpful articles and documentation</p>
             </div>
             <div className="flex items-center space-x-3">
+              <Button
+                color="blue"
+                size="sm"
+                onClick={() => router.push('/knowledge-base/analytics')}
+                className="flex items-center gap-2"
+              >
+                <BarChart3 className="h-4 w-4" />
+                Analytics
+              </Button>
               {/* Only show create button for agents */}
               {user?.role === 'agent' && (
                 <Link href="/knowledge-base/create">

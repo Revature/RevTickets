@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional, Dict, Any
 from src.services.kb_chat_service import KBChatService
+from src.services.chat_analytics_service import ChatAnalyticsService
 from src.schemas.kb_chat import ChatSessionCreate, ChatMessage, ChatSessionResponse, ChatMessageResponse, ChatResponse, SessionRating, TicketConversion
 from src.api.v1.routes.user import get_current_user
 from src.models.user import User
@@ -10,6 +11,40 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/kb-chat", tags=["Knowledge Base Chat"])
+
+
+@router.get("/sessions", response_model=List[ChatSessionResponse])
+async def get_user_sessions(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all chat sessions for the current user"""
+    try:
+        sessions = await KBChatService.get_user_sessions(
+            user_id=str(current_user.id),
+            limit=limit
+        )
+        
+        return [
+            ChatSessionResponse(
+                id=str(session.id),
+                title=session.title,
+                created_at=session.created_at.isoformat(),
+                updated_at=session.updated_at.isoformat(),
+                message_count=session.message_count,
+                is_active=session.is_active,
+                topics_discussed=session.topics_discussed,
+                satisfaction_rating=session.satisfaction_rating,
+                converted_to_ticket=session.converted_to_ticket
+            )
+            for session in sessions
+        ]
+    except Exception as e:
+        logger.error(f"Failed to get user sessions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve chat sessions"
+        )
 
 
 @router.post("/sessions", response_model=ChatSessionResponse)
@@ -253,10 +288,9 @@ async def convert_to_ticket(
             "priority": ticket_data.priority,
             "category_id": ticket_data.category_id,
             "subcategory_id": ticket_data.subcategory_id,
-            "user_id": str(current_user.id)
         }
         
-        ticket_id = await KBChatService.convert_to_ticket(session_id, ticket_create_data)
+        ticket_id = await KBChatService.convert_to_ticket(session_id, ticket_create_data, current_user)
         if not ticket_id:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -315,4 +349,26 @@ async def delete_session(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete session"
+        )
+
+
+@router.get("/analytics")
+async def get_chat_analytics(
+    days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
+    current_user: User = Depends(get_current_user)
+):
+    """Get chat analytics dashboard data"""
+    try:
+        # For now, return analytics for current user only
+        # In the future, admins could see all users' analytics
+        analytics = await ChatAnalyticsService.get_analytics(
+            user_id=str(current_user.id),
+            days=days
+        )
+        return analytics
+    except Exception as e:
+        logger.error(f"Failed to get chat analytics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve chat analytics"
         )

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../src/contexts/AuthContext';
+import { API_BASE_URL } from '../src/constants/api';
 
 interface ChatSession {
   id: string;
@@ -25,7 +26,7 @@ export const useChatSessions = () => {
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/kb-chat/sessions', {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions`, {
         headers: {
           'Authorization': `Bearer ${getToken()}`
         }
@@ -36,7 +37,11 @@ export const useChatSessions = () => {
       }
 
       const data = await response.json();
-      setSessions(data);
+      // Deduplicate sessions by ID
+      const uniqueSessions = data.filter((session: ChatSession, index: number, self: ChatSession[]) =>
+        index === self.findIndex((s: ChatSession) => s.id === session.id)
+      );
+      setSessions(uniqueSessions);
     } catch (error) {
       console.error('Error fetching sessions:', error);
       setSessions([]);
@@ -47,7 +52,7 @@ export const useChatSessions = () => {
 
   const createSession = async (initialMessage?: string): Promise<ChatSession> => {
     try {
-      const response = await fetch('/api/kb-chat/sessions', {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +66,14 @@ export const useChatSessions = () => {
       }
 
       const newSession = await response.json();
-      setSessions(prev => [newSession, ...prev]);
+      // Check if session already exists to prevent duplicates
+      setSessions(prev => {
+        const exists = prev.some(s => s.id === newSession.id);
+        if (exists) {
+          return prev; // Don't add duplicate
+        }
+        return [newSession, ...prev];
+      });
       return newSession;
     } catch (error) {
       console.error('Error creating session:', error);
@@ -71,7 +83,7 @@ export const useChatSessions = () => {
 
   const deleteSession = async (sessionId: string): Promise<void> => {
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${getToken()}`
@@ -91,7 +103,7 @@ export const useChatSessions = () => {
 
   const getSession = async (sessionId: string): Promise<ChatSession | null> => {
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}`, {
         headers: {
           'Authorization': `Bearer ${getToken()}`
         }

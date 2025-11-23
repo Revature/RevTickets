@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '../src/contexts/AuthContext';
+import { API_BASE_URL } from '../src/constants/api';
 
 interface Source {
   id: string;
@@ -23,6 +24,8 @@ interface TicketConversion {
   title: string;
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
+  category_id?: string;
+  subcategory_id?: string;
 }
 
 interface TicketCreationResult {
@@ -39,7 +42,7 @@ export const useKBChat = () => {
   const sendMessage = async (sessionId: string, message: string): Promise<ChatResponse> => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}/messages`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,7 +67,7 @@ export const useKBChat = () => {
 
   const rateSession = async (sessionId: string, rating: number): Promise<void> => {
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}/rate`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}/rate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,7 +90,7 @@ export const useKBChat = () => {
     ticketData: TicketConversion
   ): Promise<TicketCreationResult> => {
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}/convert-to-ticket`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}/convert-to-ticket`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +113,7 @@ export const useKBChat = () => {
 
   const getSessionMessages = async (sessionId: string) => {
     try {
-      const response = await fetch(`/api/kb-chat/sessions/${sessionId}/messages`, {
+      const response = await fetch(`${API_BASE_URL}/kb-chat/sessions/${sessionId}/messages`, {
         headers: {
           'Authorization': `Bearer ${getToken()}`
         }

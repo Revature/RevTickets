@@ -65,12 +65,72 @@ export interface TicketCreationResult {
 // Chat states
 export type ChatType = 'kb_chat' | 'live_chat';
 
-// Analytics interfaces
+// Chat Analytics Types
 export interface ChatAnalytics {
-  total_sessions: number;
-  average_rating: number;
-  popular_topics: string[];
-  conversion_rate: number;
+  summary: {
+    total_sessions: number;
+    total_messages: number;
+    active_sessions: number;
+    converted_sessions: number;
+    avg_messages_per_session: number;
+    conversion_rate: number;
+    avg_satisfaction_rating: number;
+    avg_session_duration_minutes: number;
+    user_messages: number;
+    assistant_messages: number;
+  };
+  top_articles: Array<{
+    article_id: string;
+    title: string;
+    reference_count: number;
+  }>;
+  sessions_trend: Array<{
+    date: string;
+    count: number;
+  }>;
+  top_topics: Array<{
+    topic: string;
+    count: number;
+  }>;
+  date_range: {
+    start_date: string;
+    end_date: string;
+    days: number;
+  };
+}
+
+// Chat Analytics Types
+export interface ChatAnalytics {
+  summary: {
+    total_sessions: number;
+    total_messages: number;
+    active_sessions: number;
+    converted_sessions: number;
+    avg_messages_per_session: number;
+    conversion_rate: number;
+    avg_satisfaction_rating: number;
+    avg_session_duration_minutes: number;
+    user_messages: number;
+    assistant_messages: number;
+  };
+  top_articles: Array<{
+    article_id: string;
+    title: string;
+    reference_count: number;
+  }>;
+  sessions_trend: Array<{
+    date: string;
+    count: number;
+  }>;
+  top_topics: Array<{
+    topic: string;
+    count: number;
+  }>;
+  date_range: {
+    start_date: string;
+    end_date: string;
+    days: number;
+  };
 }
 
 export interface ChatIntent {
