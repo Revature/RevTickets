@@ -65,6 +65,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       # ENHANCEMENT L3 KB CHAT - ChromaDB configuration
       - CHROMA_URL=http://chromadb:8000
+      # SSL Verification workaround (set to "true" to disable SSL verification for development)
+      - DISABLE_SSL_VERIFICATION=true
     depends_on:
       mongo:
         condition: service_healthy
@@ -124,9 +126,9 @@ services:
       dockerfile: Dockerfile
     container_name: nextjs-frontend
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
     depends_on:
       backend:
         condition: service_started

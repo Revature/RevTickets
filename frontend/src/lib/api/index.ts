@@ -5,11 +5,13 @@ import { ticketsApi } from './tickets';
 import { categoriesApi, subCategoriesApi } from './categories';
 import { articlesApi } from './articles';
 import { filesApi } from './files';
+import { kbChatApi } from './kb-chat';
 
 export {
   ticketsApi,
   categoriesApi,
   subCategoriesApi,
   articlesApi,
-  filesApi
+  filesApi,
+  kbChatApi
 };

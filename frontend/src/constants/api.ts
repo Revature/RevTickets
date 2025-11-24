@@ -77,4 +77,15 @@ export const API_ENDPOINTS = {
     ATTACH_TO_TICKET: (ticketId: string) => `/files/tickets/${ticketId}/attach`,
     GET_TICKET_FILES: (ticketId: string) => `/files/tickets/${ticketId}`,
   },
+  
+  // ENHANCEMENT L3: KB CHAT - Knowledge Base Chat API endpoints
+  KB_CHAT: {
+    SESSIONS: '/kb-chat/sessions',
+    SESSION_BY_ID: (id: string) => `/kb-chat/sessions/${id}`,
+    SESSION_MESSAGES: (id: string) => `/kb-chat/sessions/${id}/messages`,
+    SEND_MESSAGE: (id: string) => `/kb-chat/sessions/${id}/messages`,
+    RATE_SESSION: (id: string) => `/kb-chat/sessions/${id}/rate`,
+    CONVERT_TO_TICKET: (id: string) => `/kb-chat/sessions/${id}/convert-to-ticket`,
+    ANALYTICS: '/kb-chat/analytics',
+  },
 } as const;

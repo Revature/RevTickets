@@ -7,10 +7,10 @@ loguru==0.7.2
 pydantic-settings==2.2.1
 python-dotenv==1.0.1
 motor==3.7.1
-passlib
+passlib[bcrypt]==1.7.4
 PyJWT
 pydantic[email]
-bcrypt
+bcrypt==4.0.1
 python-multipart
 python-jose
 langchain-google-genai

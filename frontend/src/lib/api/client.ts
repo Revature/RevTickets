@@ -32,8 +32,16 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response: AxiosResponse) => response,
       (error) => {
-        if (error.response?.status === 401) {
-          this.handleUnauthorized();
+        // Only handle 401 if we have a token (means it expired/invalid)
+        // If no token, the component should handle it
+        if (error.response?.status === 401 && this.getAuthToken()) {
+          // Small delay to allow component error handlers to process first
+          setTimeout(() => {
+            // Double-check token still exists (component might have refreshed it)
+            if (this.getAuthToken()) {
+              this.handleUnauthorized();
+            }
+          }, 100);
         }
         return Promise.reject(error);
       }
