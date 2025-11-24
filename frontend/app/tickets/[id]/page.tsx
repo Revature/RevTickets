@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Breadcrumb, BreadcrumbItem, Button, Avatar, Textarea } from 'flowbite-react';
-import { MessageCircle, AlertCircle, Edit3, CheckCircle2, XCircle, Home, Brain, Sparkles } from 'lucide-react';
+import { MessageCircle, AlertCircle, Edit3, CheckCircle2, XCircle, Home } from 'lucide-react';
 import Link from 'next/link';
-import { MainLayout, ProtectedRoute } from '../../../src/app/shared/components';
+import { MainLayout, ProtectedRoute, AISummaryCard } from '../../../src/app/shared/components';
 import { LoadingSpinner } from '../../../src/app/shared/components';
 import { RichTextEditor } from '../../../src/app/shared/components/RichTextEditor';
 import { ticketsApi } from '../../../src/lib/api';
@@ -35,6 +35,8 @@ export default function TicketDetailPage() {
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [summaryGeneratedAt, setSummaryGeneratedAt] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false);
 
   const fetchTicketData = useCallback(async () => {
     if (!ticketId) return;
@@ -53,6 +55,12 @@ export default function TicketDetailPage() {
         setSummary(ticketData.aiSummary);
         setSummaryGeneratedAt(ticketData.summaryGeneratedAt || null);
         setShowSummary(true);
+        setSummaryError(null); // Clear any previous errors
+      } else {
+        // Reset summary state if ticket doesn't have one
+        setSummary(null);
+        setSummaryGeneratedAt(null);
+        setShowSummary(false);
       }
     } catch (error) {
       console.error('Failed to fetch ticket data:', error);
@@ -151,20 +159,65 @@ export default function TicketDetailPage() {
   const canModifyTicket = user?.role === 'agent' && ticket?.agentInfo?.id === user.id;
 
   // ENHANCEMENT L1 AI TICKET SUMMARY - Generate summary function
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = async (isRefresh = false) => {
     if (!ticketId) return;
 
     try {
-      setGeneratingSummary(true);
+      // Clear previous errors
+      setSummaryError(null);
+      
+      // Set appropriate loading state
+      if (isRefresh) {
+        setIsRefreshingSummary(true);
+      } else {
+        setGeneratingSummary(true);
+      }
+
       const response = await ticketsApi.generateSummary(ticketId);
+      
+      // Update summary data
       setSummary(response.summary);
       setSummaryGeneratedAt(new Date().toISOString());
       setShowSummary(true);
+      
+      // Update ticket data to reflect the new summary
+      const updatedTicket = await ticketsApi.getById(ticketId);
+      setTicket(updatedTicket);
     } catch (error) {
       console.error('Failed to generate summary:', error);
+      
+      // Extract error message
+      let errorMessage = 'Failed to generate summary. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message || errorMessage;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('401') || errorMessage.includes('403')) {
+        errorMessage = 'You do not have permission to generate summaries.';
+      } else if (errorMessage.includes('500') || errorMessage.includes('503')) {
+        errorMessage = 'AI service is temporarily unavailable. Please try again later.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      setSummaryError(errorMessage);
     } finally {
       setGeneratingSummary(false);
+      setIsRefreshingSummary(false);
     }
+  };
+
+  // Handle summary refresh
+  const handleRefreshSummary = async () => {
+    await handleGenerateSummary(true);
+  };
+
+  // Toggle summary visibility
+  const toggleSummaryVisibility = () => {
+    setShowSummary(!showSummary);
   };
   
 
@@ -389,65 +442,18 @@ export default function TicketDetailPage() {
 
                 {/* ENHANCEMENT L1 AI TICKET SUMMARY - AI Summary section for agents */}
                 {user?.role === 'agent' && ticket.status !== 'closed' && (
-                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
-                        <Brain className="h-5 w-5 mr-2 text-purple-600" />
-                        <h4 className="text-sm font-medium text-purple-900 dark:text-purple-200">
-                          AI Ticket Summary
-                        </h4>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="bg-orange-600 hover:bg-orange-700 focus:ring-orange-500"
-                        onClick={handleGenerateSummary}
-                        disabled={generatingSummary}
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {generatingSummary ? 'Generating...' : (summary ? 'Regenerate Summary' : 'Generate Summary')}
-                      </Button>
-                    </div>
-
-                    {/* Loading state */}
-                    {generatingSummary && (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-                        <span className="ml-3 text-sm text-purple-700 dark:text-purple-300">
-                          AI is analyzing the ticket conversation...
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Summary display */}
-                    {showSummary && summary && !generatingSummary && (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-purple-200 dark:border-purple-700 p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h5 className="text-sm font-medium text-gray-900 dark:text-white">
-                            Summary Generated
-                          </h5>
-                          {summaryGeneratedAt && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {formatFullDateTime(summaryGeneratedAt)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                            {summary}
-                          </p>
-                        </div>
-                        <div className="flex justify-end mt-3">
-                          <Button
-                            size="xs"
-                            color="gray"
-                            onClick={() => setShowSummary(false)}
-                          >
-                            Hide Summary
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <AISummaryCard
+                    summary={summary}
+                    generatingSummary={generatingSummary}
+                    isRefreshingSummary={isRefreshingSummary}
+                    summaryGeneratedAt={summaryGeneratedAt}
+                    showSummary={showSummary}
+                    summaryError={summaryError}
+                    onGenerate={() => handleGenerateSummary(false)}
+                    onRefresh={handleRefreshSummary}
+                    onToggleVisibility={toggleSummaryVisibility}
+                    onDismissError={() => setSummaryError(null)}
+                  />
                 )}
 
                 {/* Description */}

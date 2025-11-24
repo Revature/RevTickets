@@ -42,13 +42,21 @@ async def log_requests(request: Request, call_next):
     
     return response
 
-# Add CORS middleware
+# Add CORS middleware - MUST be added before routes
+# This allows the frontend (localhost:3000) to make requests to the backend (localhost:8000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://frontend:3000"],  # Frontend URLs
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://frontend:3000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ],  # Frontend URLs
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Health check endpoint
